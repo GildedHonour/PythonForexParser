@@ -10,38 +10,51 @@ def main():
   url = 'http://www.dailyfx.com/calendar?cmp=SFS-70160000000E4zK'
   html_page = urllib2.urlopen(url)
   soup = BeautifulSoup(html_page.read())
-  tr_all = soup.findAll('tr', {'class': 'e-cal-row empty'})[0] 
-  # print(len(tr_all))
-  
-  date = tr_all.find('td').find('div').find('span').text[3:]
-  print('date: ', date)
+  last_date = None
+  i = 0
+  for tr_item in soup.findAll('tr', {'class': 'e-cal-row empty'}):
+    # print('tr_item: ', tr_item)
+    date_raw = tr_item.find('td').find('div')
+    # print 'date_raw:', date_raw
+    if date_raw:
+      date = date_raw.find('span').text[3:]
+      last_date = date
+    else:
+      date = last_date
 
-  time = tr_all.findAll('td')[1].text
-  print('time: ', time)
+    print('date: ', date)
 
-  currency = tr_all.findAll('td')[2].find('img').get('alt', '')[10:]
-  print('currency: ', currency)
+    time = tr_item.findAll('td')[1].text
+    print('time: ', time)
 
-  event = tr_all.findAll('td')[3].text
-  print('event: ', event)
+    currency = tr_item.findAll('td')[2].find('img').get('alt', '')[10:]
+    print('currency: ', currency)
 
-  importance_raw = tr_all.findAll('td')[4].get('class')
-  importance = re.search('\s\w+$', importance_raw) 
-  print('importance: ', importance.group(0))
+    event = tr_item.findAll('td')[3].text
+    print('event: ', event)
 
-  actual = tr_all.findAll('td')[5].find('span').text
-  print('actual: ', actual)
+    importance_raw = tr_item.findAll('td')[4].get('class')
+    importance = re.search('\s\w+$', importance_raw) 
+    print('importance: ', importance.group(0))
 
-  forecast = tr_all.findAll('td')[6].text
-  print('forecast: ', forecast)
+    actual = tr_item.findAll('td')[5].find('span').text
+    print('actual: ', actual)
 
-  previous = tr_all.findAll('td')[7].find('span').text
-  print('previous: ', previous)
+    forecast = tr_item.findAll('td')[6].text
+    print('forecast: ', forecast)
 
-  # notes = tr_all.findAll('td')[8].find('div').text
-  # print('notes: ', notes)
+    previous = tr_item.findAll('td')[7].find('span').text
+    print('previous: ', previous)
 
-  print('done!')
+    notes_raw = tr_item.findAll('td')[8].get('class')
+    if notes_raw:
+      notes = notes_raw.find('td')[1].find('div').text
+      print('notes', notes)
+    else:
+      print('no notes')
+
+    i += 1
+    print(i, ' -----------------------------------')
 
 if __name__ == "__main__":
   main()
