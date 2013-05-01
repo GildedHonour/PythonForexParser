@@ -3,19 +3,35 @@ from BeautifulSoup import BeautifulSoup
 import MySQLdb
 import re
 
-db = MySQLdb.connect(host="localhost", user="alex", passwd="", db="test")
-cur = db.cursor()
+
+base_url = 'http://www.dailyfx.com/calendar'
+request_url_pattern = 'http://www.dailyfx.com/calendar?tz=&sort=date&week={0}%2F{1}&eur=true&usd=true&jpy=true&gbp=true&chf=true&aud=true&cad=true&nzd=true&cny=true&high=true&medium=true&low=true'
 
 def main():
-  url = 'http://www.dailyfx.com/calendar?cmp=SFS-70160000000E4zK'
-  html_page = urllib2.urlopen(url)
+  html_page = urllib2.urlopen(request_url_pattern.format('2012', '0101'))
   soup = BeautifulSoup(html_page.read())
+  this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
+  next_week_link = None
+  
+  while True:
+    week_data_array = scrape_week_data(soup)
+    next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
+    print 'next_week_link ', next_week_link
+    if this_week_link == next_week_link:
+      break
+
+    html_page = urllib2.urlopen(parse_next_week_url(next_week_link))
+    print 'parse_next_week_url(next_week_link)-----', parse_next_week_url(next_week_link)
+    soup = BeautifulSoup(html_page.read())
+
+  print 'done!!!!!'
+
+def scrape_week_data(soup):
   last_date = None
   i = 0
+  item_list = []
   for tr_item in soup.findAll('tr', {'class': 'e-cal-row empty'}):
-    # print('tr_item: ', tr_item)
     date_raw = tr_item.find('td').find('div')
-    # print 'date_raw:', date_raw
     if date_raw:
       date = date_raw.find('span').text[3:]
       last_date = date
@@ -23,38 +39,68 @@ def main():
       date = last_date
 
     print('date: ', date)
+    item = {'date': date}
 
     time = tr_item.findAll('td')[1].text
     print('time: ', time)
+    item['time'] = time
 
     currency = tr_item.findAll('td')[2].find('img').get('alt', '')[10:]
     print('currency: ', currency)
+    item['currency'] = currency
 
     event = tr_item.findAll('td')[3].text
     print('event: ', event)
+    item['event'] = event
 
     importance_raw = tr_item.findAll('td')[4].get('class')
     importance = re.search('\s\w+$', importance_raw) 
     print('importance: ', importance.group(0))
+    item['importance'] = importance
 
     actual = tr_item.findAll('td')[5].find('span').text
     print('actual: ', actual)
+    item['actual'] = actual
 
     forecast = tr_item.findAll('td')[6].text
     print('forecast: ', forecast)
+    item['forecast'] = forecast
 
     previous = tr_item.findAll('td')[7].find('span').text
     print('previous: ', previous)
+    item['previous'] = previous
 
     notes_raw = tr_item.findAll('td')[8].get('class')
-    if notes_raw:
-      notes = notes_raw.find('td')[1].find('div').text
-      print('notes', notes)
+    notes = if notes_raw:
+      notes_raw.find('td')[1].find('div').text
     else:
-      print('no notes')
+      ''
+    print('notes', notes)
+    item['notes'] = notes
 
+    item_list.append(item)
     i += 1
-    print(i, ' -----------------------------------')
+    print i
+
+def parse_next_week_url(next_week_link):
+  next_week_url_raw = re.search("javascript:setWeek\(\'(.*)\'\)", next_week_link)
+  a = request_url_pattern.format(next_week_url_raw.group(1)[:4], next_week_url_raw.group(1)[5:])
+  print 'date: ', next_week_url_raw.group(1)[:4], next_week_url_raw.group(1)[5:]
+  print ' -----------------------------------'
+  return a 
+
+def insert_data_array(data_array):
+  db = MySQLdb.connect(host="localhost", user="alex", passwd="", db="test")
+  cursor = db.cursor()
+  sql_pattern = 'INSERT INTO T1() VALUES'
+  for item in data_array:
+    sql = sql_pattern.format(item.fff, item.bbb)
+    cursor.execute(sql)
+
+  db.close()
+
+
+
 
 if __name__ == "__main__":
   main()
