@@ -32,17 +32,27 @@ def scrape_week_data(soup, year = "2222"):
   last_date = None
   i = 0 # DEBUG!!!!!!!!!!!!
   item_list = []
-  for tr_item in soup.findAll('tr', {'class': 'e-cal-row empty'}):
+  for tr_item in soup.findAll('tr', {'class': re.compile(r'\be-cal-row\b')}):
     date_raw = tr_item.find('td').find('div')
+    # print 'tr_item -----', tr_item
+    # print 'date_raw -----', date_raw
     if date_raw:
       date = date_raw.find('span').text[3:]
       last_date = date
+      # print '---------date = date = date_raw.find ', date
     else:
       date = last_date
+      # print '---------date = last_date ', date
 
     time_str_raw = tr_item.findAll('td')[1].text
     time_str = parse_time_str(time_str_raw)
     item = {}
+    # print '---------debuggggggggggggg'
+    # print 'date ', date
+    # print 'year ', year
+    # print 'time_str ', time_str
+    # print 'end of debuggggggggggggg---------'
+
     item['date_time'] = datetime.datetime.strptime(date + ' ' + year + ' ' + time_str, "%b %d %Y %H:%M")
     print item['date_time']
 
@@ -86,17 +96,39 @@ def scrape_week_data(soup, year = "2222"):
 
   return item_list
 
+def insert_data_up_till_now():
+  if '--year' in sys.argv:
+    year = sys.argv[3]
+  else:
+    year = 2012
+  
+  soup = get_soup(request_url_pattern.format(year, '0101'))
+  # soup = get_soup(request_url_pattern.format(year, '0119'))
+  this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
+  next_week_link = None
+  
+  while True:
+    week_data_array = scrape_week_data(soup)
+    insert_data_array(week_data_array)
+    if next_week_equals_current_week(soup, this_week_link):
+      break
+    
+    next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
+    soup = get_soup(parse_next_week_url(next_week_link))
+    print 'parse_next_week_url(next_week_link)-----', parse_next_week_url(next_week_link) # DEBUG!!!!!!!!!!!!
+
+  print '---------done for "up till now"---------------' # DEBUG!!!!!!!!!!!!
+
+
 def parse_next_week_url(next_week_link):
   next_week_url_raw = re.search("javascript:setWeek\(\'(.*)\'\)", next_week_link)
   return request_url_pattern.format(next_week_url_raw.group(1)[:4], next_week_url_raw.group(1)[5:])
 
 def insert_data_array(data_array):
   def insert_data_array0(cursor):
-    sql_pattern = 'INSERT INTO ForexCurrencies(Date, Currency, Event, Importance, Actual, Forecast, Previous, Notes) VALUES("{0}", "{1}", "{2}", "{3}", "{4}", "{5}", "{6}", "{7}")'
+    sql_pattern = 'INSERT INTO ForexCurrencies(Date, Currency, Event, Importance, Actual, Forecast, Previous, Notes) VALUES(%s, %s, %s, %s, %s, %s, %s, %s)'
     for item in data_array:
-      sql = sql_pattern.format((item['date_time'].strftime('%Y-%m-%d %H:%M:%S')) , item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes'])
-      # print 'sql -------  ', sql
-      cursor.execute(sql)
+      cursor.execute(sql_pattern, (item['date_time'].strftime('%Y-%m-%d %H:%M:%S'), item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes']))
   
   execute_db_statement(insert_data_array0)
 
@@ -152,27 +184,6 @@ def execute_db_statement(code_block):
   db.commit()
   db.close()
 
-def insert_data_up_till_now():
-  if '--year' in sys.argv:
-    year = sys.argv[3]
-  else:
-    year = 2012
-  
-  soup = get_soup(request_url_pattern.format(year, '0101'))
-  this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
-  next_week_link = None
-  
-  while True:
-    week_data_array = scrape_week_data(soup)
-    insert_data_array(week_data_array)
-    if next_week_equals_this_week(soup, this_week_link):
-      break
-    
-    next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
-    soup = get_soup(parse_next_week_url(next_week_link))
-    print 'parse_next_week_url(next_week_link)-----', parse_next_week_url(next_week_link) # DEBUG!!!!!!!!!!!!
-
-  print '---------done for "up till now"---------------' # DEBUG!!!!!!!!!!!!
 
 def insert_data_from_now_on():
   soup = get_soup(base_url)
