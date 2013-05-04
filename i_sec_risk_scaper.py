@@ -17,7 +17,7 @@ class EST(datetime.tzinfo):
         return datetime.timedelta(0)
 
 def get_current_date_time_est():
-  datetime.datetime.now(EST()) 
+  return datetime.datetime.now(EST()) 
 
 def main():
   if '--up_till_now' in sys.argv:
@@ -27,8 +27,7 @@ def main():
   else:
     insert_data_from_now_on()
 
-
-def scrape_week_data(soup, year = "2222"):
+def scrape_week_data(soup, year):
   last_date = None
   i = 0 # DEBUG!!!!!!!!!!!!
   item_list = []
@@ -100,29 +99,29 @@ def insert_data_up_till_now():
   if '--year' in sys.argv:
     year = sys.argv[3]
   else:
-    year = 2012
+    year = '2012'
   
   soup = get_soup(request_url_pattern.format(year, '0101'))
-  # soup = get_soup(request_url_pattern.format(year, '0119'))
   this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
   next_week_link = None
   
   while True:
-    week_data_array = scrape_week_data(soup)
+    week_data_array = scrape_week_data(soup, year)
     insert_data_array(week_data_array)
     if next_week_equals_current_week(soup, this_week_link):
       break
     
     next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
-    soup = get_soup(parse_next_week_url(next_week_link))
+    url, year = parse_next_week_url(next_week_link)
+    soup = get_soup(url)
     print 'parse_next_week_url(next_week_link)-----', parse_next_week_url(next_week_link) # DEBUG!!!!!!!!!!!!
 
   print '---------done for "up till now"---------------' # DEBUG!!!!!!!!!!!!
 
-
 def parse_next_week_url(next_week_link):
   next_week_url_raw = re.search("javascript:setWeek\(\'(.*)\'\)", next_week_link)
-  return request_url_pattern.format(next_week_url_raw.group(1)[:4], next_week_url_raw.group(1)[5:])
+  year = next_week_url_raw.group(1)[:4]
+  return request_url_pattern.format(year, next_week_url_raw.group(1)[5:]), year
 
 def insert_data_array(data_array):
   def insert_data_array0(cursor):
@@ -136,26 +135,18 @@ def scrape_current_week_data(soup):
   soup = get_soup(base_url)
   this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
 
-def upsert_current_week_data(data_array):
-  def upsert_current_week_data0(cursor):
-    current_date_time = get_current_date_time_est()
-    for item in data_array:
-      if not record_exists(cursor, item):
-        insert_record(cursor, item)
-      elif item.date < current_date_time and item.time < current_date_time: #TODO
-        continue
-      else:
-        sql = sql_pattern.format(item['date'], item['time'], item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes'])
-        cursor.execute(sql)
-
-  execute_db_statement(upsert_current_week_data0)
-
 def clear_all_db():
   execute_db_statement(lambda cursor: cursor.execute('DELETE FROM ForexCurrencies'))
   print 'Database has been cleaned up.'
 
 def clear_db_from_now_on():
-  execute_db_statement(lambda cursor: cursor.execute('DELETE FROM ForexCurrencies'))
+  def clear_db_from_now_on0(cursor):
+    cursor.execute("DELETE FROM ForexCurrencies WHERE Date >= '%s'" % get_current_date_time_est())
+    rows = cursor.fetchall()
+    for item in rows:
+      print item
+
+  execute_db_statement(clear_db_from_now_on0)
 
 def get_soup(url):
   html_page = urllib2.urlopen(url)
@@ -165,12 +156,6 @@ def next_week_equals_current_week(soup, this_week_link):
   next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
   print 'next_week_link ', next_week_link # DEBUG!!!!!!!!!!!!
   return this_week_link == next_week_link
-
-def record_exists(cursor, item):
-  sql_pattern = 'SELECT COUNT(1) FROM ForexCurrencies WHERE Date={0} AND Time={1}'
-  sql = sql_pattern.format(item['date'], item['time'], item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes'])
-  cursor.execute(sql)
-  return cursor.fetchone()[0]
 
 def insert_record(cursor, item):
   sql_pattern = 'INSERT INTO ForexCurrencies(Date, Time, Currency, Event, Importance, Actual, Forecast, Previous, Notes) VALUES({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})'
@@ -184,21 +169,20 @@ def execute_db_statement(code_block):
   db.commit()
   db.close()
 
-
 def insert_data_from_now_on():
   soup = get_soup(base_url)
-  current_week_data_array = scrape_week_data(soup)
   current_time = get_current_date_time_est()
-  #clear_db_from_now_on()
-  # upsert_current_week_data(current_week_data_array)
+  current_week_data_array = scrape_week_data(soup, str(current_time.year))
+  clear_db_from_now_on()
   insert_data_array(current_week_data_array)
   
   while True:
     next_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[3].find('a').get('href', '')
-    soup = get_soup(parse_next_week_url(next_week_link))
+    url, year = parse_next_week_url(next_week_link)
+    soup = get_soup(url)
     print 'parse_next_week_url(next_week_link)-----', parse_next_week_url(next_week_link) # DEBUG!!!!!!!!!!!!
     
-    week_data_array = scrape_week_data(soup)
+    week_data_array = scrape_week_data(soup, year)
     if not week_data_array:
       print 'break---------'
       print 'week_data_array ---- ', week_data_array
@@ -213,5 +197,6 @@ def parse_time_str(time_str):
     return time_str[:-4]
 
   return time_str
+
 if __name__ == "__main__":
   main()
