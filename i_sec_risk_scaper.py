@@ -149,6 +149,7 @@ def execute_db_statement(code_block):
   db = MySQLdb.connect(host='localhost', user='alex', passwd='', db='test')
   cursor = db.cursor()
   code_block(cursor)
+  db.commit()
   db.close()
 
 def insert_data_up_till_now():
