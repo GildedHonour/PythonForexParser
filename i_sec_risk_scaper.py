@@ -7,17 +7,7 @@ import datetime
 import time
 
 base_url = 'http://www.dailyfx.com/calendar'
-request_url_pattern = 'http://www.dailyfx.com/calendar?tz=&sort=date&week={0}%2F{1}&eur=true&usd=true&jpy=true&gbp=true&chf=true&aud=true&cad=true&nzd=true&cny=true&high=true&medium=true&low=true'
-
-class EST(datetime.tzinfo):
-    def utcoffset(self, dt):
-      return datetime.timedelta()
-
-    def dst(self, dt):
-        return datetime.timedelta(0)
-
-def get_current_date_time_est():
-  return datetime.datetime.now(EST()) 
+url_pattern = 'http://www.dailyfx.com/calendar?tz=&sort=date&week={0}%2F{1}&eur=true&usd=true&jpy=true&gbp=true&chf=true&aud=true&cad=true&nzd=true&cny=true&high=true&medium=true&low=true'
 
 def main():
   if '--up_till_now' in sys.argv:
@@ -101,7 +91,7 @@ def insert_data_up_till_now():
   else:
     year = '2012'
   
-  soup = get_soup(request_url_pattern.format(year, '0101'))
+  soup = get_soup(url_pattern.format(year, '0101'))
   this_week_link = soup.find('div', {'id': 'e-cal-control-top'}).findAll('span')[1].find('a').get('href', '')
   next_week_link = None
   
@@ -121,13 +111,15 @@ def insert_data_up_till_now():
 def parse_next_week_url(next_week_link):
   next_week_url_raw = re.search("javascript:setWeek\(\'(.*)\'\)", next_week_link)
   year = next_week_url_raw.group(1)[:4]
-  return request_url_pattern.format(year, next_week_url_raw.group(1)[5:]), year
+  return url_pattern.format(year, next_week_url_raw.group(1)[5:]), year
 
 def insert_data_array(data_array):
   def insert_data_array0(cursor):
     sql_pattern = 'INSERT INTO ForexCurrencies(Date, Currency, Event, Importance, Actual, Forecast, Previous, Notes) VALUES(%s, %s, %s, %s, %s, %s, %s, %s)'
     for item in data_array:
-      cursor.execute(sql_pattern, (item['date_time'].strftime('%Y-%m-%d %H:%M:%S'), item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes']))
+      a = (item['date_time'].strftime('%Y-%m-%d %H:%M:%S'), item['currency'], item['event'], item['importance'], item['actual'], item['forecast'], item['previous'], item['notes'])
+      print 'sql --- ', a
+      cursor.execute(sql_pattern, a)
   
   execute_db_statement(insert_data_array0)
 
@@ -163,7 +155,7 @@ def insert_record(cursor, item):
   cursor.execute(sql)
 
 def execute_db_statement(code_block):
-  db = MySQLdb.connect(host='localhost', user='alex', passwd='', db='test')
+  db = MySQLdb.connect(host='localhost', user='alex', passwd='', db='test', use_unicode = True, charset = "utf8",)
   cursor = db.cursor()
   code_block(cursor)
   db.commit()
@@ -197,6 +189,16 @@ def parse_time_str(time_str):
     return time_str[:-4]
 
   return time_str
+
+def get_current_date_time_est():
+  return datetime.datetime.now(EST()) 
+
+class EST(datetime.tzinfo):
+  def utcoffset(self, dt):
+    return datetime.timedelta()
+
+  def dst(self, dt):
+      return datetime.timedelta(0)
 
 if __name__ == "__main__":
   main()
