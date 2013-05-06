@@ -154,5 +154,4 @@ class EST(datetime.tzinfo):
     return datetime.timedelta(0)
 
 if __name__ == "__main__":
-  # clear_db_from_now_on()
   main()
